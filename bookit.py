@@ -57,12 +57,6 @@ def sanitize_filename(filename):
     help="Fallback title if no title is found. Use {date} for current date.",
 )
 @click.option(
-    "--no-include-source",
-    is_flag=True,
-    default=True,
-    help="Exclude the source URL from the Markdown output.",
-)
-@click.option(
     "--use-readability-js",
     is_flag=True,
     default=True,
@@ -153,7 +147,7 @@ class BookitConverter(MarkdownConverter):
 
 
 def convert_to_markdown(content_html):
-    converter = BookitConverter(heading_style=ATX)
+    converter = BookitConverter(heading_style=ATX, bullets="-")
     markdown_content = converter.convert(content_html)
     return markdown_content
 
@@ -171,6 +165,9 @@ def extract_readable_content_and_title(html_content, use_readability_js):
             html_content, use_readability=use_readability_js
         )
         content_html = rpy.get("content", "")
+        content_html = content_html.replace(
+            'href="about:blank/', 'href="../'
+        )  # Fix for readability replacing .. with about:blank
         title = rpy.get("title", "").strip()
         source_url = rpy.get("domain", "")
     except Exception as e:
