@@ -62,6 +62,12 @@ def sanitize_filename(filename):
     default=True,
     help="Use Readability.js for processing pages, requires Node to be installed (recommended).",
 )
+@click.option(
+    "--format",
+    multiple=True,
+    default=["md"],
+    help="Output format(s) to save the content in (md, html, raw.html). Can be specified multiple times i.e. --format md --format html",
+)
 def save(
     url,
     inline_links,
@@ -70,6 +76,7 @@ def save(
     include_title,
     include_comments,
     fallback_title,
+    format,
 ):
     """
     Download a URL, convert it to Markdown with specified options, and save it to a file.
@@ -105,26 +112,43 @@ def save(
         yaml_metadata = yaml.dump(metadata, sort_keys=False)
         markdown_content = f"---\n{yaml_metadata}---\n\n{markdown_content}"
 
-    # Determine output path
+    output_dir = create_output_dir(url)
+
+    safe_title = sanitize_filename(title)
+
+    content_formats = {
+        "md": markdown_content,
+        "html": html_readable_content,
+        "raw.html": html_content,
+    }
+
+    for fmt in format:
+        if fmt not in content_formats:
+            click.echo(f"Invalid format: {fmt}", err=True)
+            continue
+
+        write_to_file(content_formats[fmt], output_dir, safe_title, fmt)
+
+
+def write_to_file(markdown_content, output_dir, safe_title, extension):
+    output_file = os.path.join(output_dir, f"{safe_title}.{extension}")
+    try:
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(markdown_content)
+        click.echo(f"Saved {extension} content to {output_file}")
+    except Exception as e:
+        click.echo(f"Error writing to file {output_file}: {e}", err=True)
+        sys.exit(1)
+
+
+def create_output_dir(url):
     parsed_url = urlparse(url)
     domain = parsed_url.netloc.replace("www.", "")
     if not domain:
         domain = "unknown_domain"
-
-    # Ensure title is safe for filenames
-    safe_title = sanitize_filename(title)
     output_dir = os.path.join(os.getcwd(), domain)
     os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, f"{safe_title}.md")
-
-    # Save to file
-    try:
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(markdown_content)
-        click.echo(f"Saved Markdown to {output_file}")
-    except Exception as e:
-        click.echo(f"Error writing to file {output_file}: {e}", err=True)
-        sys.exit(1)
+    return output_dir
 
 
 class BookitConverter(MarkdownConverter):
