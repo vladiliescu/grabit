@@ -2,18 +2,19 @@
 # dependencies = [
 # ]
 # ///
-
+import re
 
 import click
 import requests
 from readabilipy import simple_json_from_html_string
-from markdownify import markdownify as md
+from markdownify import ATX
 from urllib.parse import urlparse
 from datetime import datetime
 import os
 import yaml
 import sys
 from text_unidecode import unidecode
+from markdownify import MarkdownConverter
 
 
 from pathlib import Path
@@ -75,30 +76,19 @@ def save(
     include_title,
     include_comments,
     fallback_title,
-    no_include_source,
 ):
     """
     Download a URL, convert it to Markdown with specified options, and save it to a file.
     """
 
     html_content = download_html_content(url)
-    content_html, title = extract_readable_content_and_title(
+    html_readable_content, title = extract_readable_content_and_title(
         html_content, use_readability_js
     )
-
-    if not title:
-        title = fallback_title.format(date=datetime.now().strftime("%Y-%m-%d"))
-
+    title = handle_missing_title(fallback_title, title)
     title = unidecode(title)
 
-    # Prepare metadata
-    metadata = {}
-    if metadata_yaml:
-        metadata["title"] = title
-        metadata["date"] = datetime.now().isoformat()
-        metadata["source"] = url
-
-    markdown_content = md(content_html)
+    markdown_content = convert_to_markdown(html_readable_content)
 
     # Include title as H1
     if include_title:
@@ -110,12 +100,14 @@ def save(
         if comments_md:
             markdown_content += f"\n\n## Comments\n\n{comments_md}"
 
-    # Exclude source link
-    if not no_include_source:
-        markdown_content += f"\n\n[Source]({url})"
-
     # Add YAML front matter
     if metadata_yaml:
+        metadata = {
+            "title": title,
+            "source": url,
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        }
+
         yaml_metadata = yaml.dump(metadata, sort_keys=False)
         markdown_content = f"---\n{yaml_metadata}---\n\n{markdown_content}"
 
@@ -139,6 +131,38 @@ def save(
     except Exception as e:
         click.echo(f"Error writing to file {output_file}: {e}", err=True)
         sys.exit(1)
+
+
+class BookitConverter(MarkdownConverter):
+    def _convert_hn(self, n: int, el: any, text: str, convert_as_inline: bool) -> str:
+        header = super()._convert_hn(n, el, text, convert_as_inline)
+
+        if convert_as_inline:
+            return header
+
+        # Remove anchor link if present
+        parts = header.split("[", 1)
+        if len(parts) > 1 and "](" in parts[1]:
+            header = parts[0].strip()
+
+        # Add newline if the header doesn't start with one
+        if not re.search(r"^\n", text):
+            return "\n" + header
+
+        return header
+
+
+def convert_to_markdown(content_html):
+    converter = BookitConverter(heading_style=ATX)
+    markdown_content = converter.convert(content_html)
+    return markdown_content
+
+
+def handle_missing_title(fallback_title, title):
+    if not title:
+        title = fallback_title.format(date=datetime.now().strftime("%Y-%m-%d"))
+
+    return title
 
 
 def extract_readable_content_and_title(html_content, use_readability_js):
