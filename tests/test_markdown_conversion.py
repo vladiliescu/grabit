@@ -1,4 +1,4 @@
-from bookit import convert_to_markdown
+from grabit import convert_to_markdown
 
 
 def test_bold_and_italic():

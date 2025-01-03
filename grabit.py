@@ -151,7 +151,7 @@ def create_output_dir(url):
     return output_dir
 
 
-class BookitConverter(MarkdownConverter):
+class GrabitConverter(MarkdownConverter):
     def convert_em(self, el, text, convert_as_inline):
         return self.convert_i(el, text, convert_as_inline)
 
@@ -180,7 +180,7 @@ class BookitConverter(MarkdownConverter):
 
 
 def convert_to_markdown(content_html):
-    converter = BookitConverter(heading_style=ATX, bullets="-")
+    converter = GrabitConverter(heading_style=ATX, bullets="-")
     markdown_content = converter.convert(content_html)
     return markdown_content
 
