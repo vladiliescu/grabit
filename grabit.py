@@ -50,6 +50,7 @@ from markdownify import MarkdownConverter
 )
 @click.option(
     "--format",
+    "output_formats",
     multiple=True,
     default=["md"],
     help="Output format(s) to save the content in (md, html, raw.html). Can be specified multiple times i.e. --format md --format html",
@@ -61,7 +62,7 @@ def save(
     include_title,
     include_source,
     fallback_title,
-    format,
+    output_formats,
 ):
     """
     Download a URL, convert it to Markdown with specified options, and save it to a file.
@@ -92,7 +93,7 @@ def save(
         "raw.html": html_content,
     }
 
-    for fmt in format:
+    for fmt in output_formats:
         if fmt not in content_formats:
             click.echo(f"Invalid format: {fmt}", err=True)
             continue
@@ -202,7 +203,7 @@ def extract_readable_content_and_title(html_content, use_readability_js):
         content_html = rpy.get("content", "")
         content_html = content_html.replace(
             'href="about:blank/', 'href="../'
-        )  # Fix for readability replacing .. with about:blank
+        )  # Fix for readability replacing ".." with "about:blank"
         title = rpy.get("title", "").strip()
     except Exception as e:
         click.echo(f"Error processing HTML content: {e}", err=True)
