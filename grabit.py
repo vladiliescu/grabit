@@ -17,14 +17,6 @@ from text_unidecode import unidecode
 from markdownify import MarkdownConverter
 
 
-from pathlib import Path
-
-
-# Function to sanitize filenames
-def sanitize_filename(filename):
-    return Path(filename)
-
-
 @click.command()
 @click.argument("url")
 @click.option(
@@ -106,6 +98,11 @@ def save(
             continue
 
         write_to_file(content_formats[fmt], output_dir, safe_title, fmt)
+
+
+def sanitize_filename(filename):
+    sanitized = re.sub(r'[<>:"/\\|?*]', "_", filename)
+    return sanitized
 
 
 def try_include_title(include_title, markdown_content, title):
