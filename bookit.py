@@ -7,7 +7,7 @@ import re
 import click
 import requests
 from readabilipy import simple_json_from_html_string
-from markdownify import ATX
+from markdownify import ATX, abstract_inline_conversion, UNDERSCORE
 from urllib.parse import urlparse
 from datetime import datetime
 import os
@@ -152,6 +152,15 @@ def create_output_dir(url):
 
 
 class BookitConverter(MarkdownConverter):
+    def convert_em(self, el, text, convert_as_inline):
+        return self.convert_i(el, text, convert_as_inline)
+
+    def convert_i(self, el, text, convert_as_inline):
+        """I like my bolds ** and my italics _."""
+        return abstract_inline_conversion(lambda s: UNDERSCORE)(
+            self, el, text, convert_as_inline
+        )
+
     def _convert_hn(self, n: int, el: any, text: str, convert_as_inline: bool) -> str:
         header = super()._convert_hn(n, el, text, convert_as_inline)
 
