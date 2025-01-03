@@ -28,13 +28,7 @@ def sanitize_filename(filename):
 @click.command()
 @click.argument("url")
 @click.option(
-    "--inline-links",
-    is_flag=True,
-    default=True,
-    help="Use inline links instead of reference-style links.",
-)
-@click.option(
-    "--metadata-yaml",
+    "--yaml-frontmatter",
     is_flag=True,
     default=True,
     help="Include YAML front matter with metadata.",
@@ -46,10 +40,10 @@ def sanitize_filename(filename):
     help="Include the page title as an H1 heading.",
 )
 @click.option(
-    "--include-comments",
+    "--include-source",
     is_flag=True,
-    default=True,
-    help="Include comments from StackExchange pages.",
+    default=False,
+    help="Include the page source.",
 )
 @click.option(
     "--fallback-title",
@@ -70,11 +64,10 @@ def sanitize_filename(filename):
 )
 def save(
     url,
-    inline_links,
     use_readability_js,
-    metadata_yaml,
+    yaml_frontmatter,
     include_title,
-    include_comments,
+    include_source,
     fallback_title,
     format,
 ):
@@ -91,26 +84,11 @@ def save(
 
     markdown_content = convert_to_markdown(html_readable_content)
 
-    # Include title as H1
-    if include_title:
-        markdown_content = f"# {title}\n\n{markdown_content}"
-
-    # Include comments for StackExchange pages
-    if include_comments and "stackoverflow.com/questions/" in url:
-        comments_md = extract_stackexchange_comments(html_content)
-        if comments_md:
-            markdown_content += f"\n\n## Comments\n\n{comments_md}"
-
-    # Add YAML front matter
-    if metadata_yaml:
-        metadata = {
-            "title": title,
-            "source": url,
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        }
-
-        yaml_metadata = yaml.dump(metadata, sort_keys=False)
-        markdown_content = f"---\n{yaml_metadata}---\n\n{markdown_content}"
+    markdown_content = try_include_source(include_source, markdown_content, url)
+    markdown_content = try_include_title(include_title, markdown_content, title)
+    markdown_content = try_add_yaml_frontmatter(
+        markdown_content, yaml_frontmatter, title, url
+    )
 
     output_dir = create_output_dir(url)
 
@@ -128,6 +106,33 @@ def save(
             continue
 
         write_to_file(content_formats[fmt], output_dir, safe_title, fmt)
+
+
+def try_include_title(include_title, markdown_content, title):
+    if include_title:
+        markdown_content = f"# {title}\n\n{markdown_content}"
+    return markdown_content
+
+
+def try_include_source(include_source, markdown_content, url):
+    if include_source:
+        markdown_content = f"[Source]({url})\n\n{markdown_content}"
+    return markdown_content
+
+
+def try_add_yaml_frontmatter(markdown_content, yaml_frontmatter, title, url):
+    if not yaml_frontmatter:
+        return markdown_content
+
+    metadata = {
+        "title": title,
+        "source": url,
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+    }
+
+    yaml_metadata = yaml.dump(metadata, sort_keys=False)
+    markdown_content = f"---\n{yaml_metadata}---\n\n{markdown_content}"
+    return markdown_content
 
 
 def write_to_file(markdown_content, output_dir, safe_title, extension):
@@ -202,11 +207,13 @@ def extract_readable_content_and_title(html_content, use_readability_js):
             'href="about:blank/', 'href="../'
         )  # Fix for readability replacing .. with about:blank
         title = rpy.get("title", "").strip()
-        source_url = rpy.get("domain", "")
     except Exception as e:
         click.echo(f"Error processing HTML content: {e}", err=True)
         sys.exit(1)
-    return content_html, title
+    return (
+        content_html,
+        title,
+    )
 
 
 def download_html_content(url):
@@ -218,33 +225,6 @@ def download_html_content(url):
         click.echo(f"Error downloading {url}: {e}", err=True)
         sys.exit(1)
     return html_content
-
-
-def extract_stackexchange_comments(html_content):
-    """
-    Extract comments from StackExchange question pages.
-    Returns Markdown formatted comments.
-    """
-    from bs4 import BeautifulSoup
-
-    try:
-        soup = BeautifulSoup(html_content, "html.parser")
-        comments_div = soup.find("div", {"id": "comments"})
-        if not comments_div:
-            return ""
-
-        comments = []
-        for comment in comments_div.find_all("div", {"class": "comment"}):
-            author = comment.find("a", {"class": "comment-user"}).get_text(strip=True)
-            content = comment.find("span", {"class": "comment-copy"}).get_text(
-                strip=True
-            )
-            comments.append(f"**{author}:** {content}")
-
-        return "\n\n".join(comments)
-    except Exception as e:
-        click.echo(f"Error extracting comments: {e}", err=True)
-        return ""
 
 
 if __name__ == "__main__":
