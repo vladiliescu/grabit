@@ -170,11 +170,6 @@ class GrabitConverter(MarkdownConverter):
         if convert_as_inline:
             return header
 
-        # Remove anchor link if present
-        parts = header.split("[", 1)
-        if len(parts) > 1 and "](" in parts[1]:
-            header = parts[0].strip()
-
         # Add newline if the header doesn't start with one
         if not re.search(r"^\n", text):
             return "\n" + header
