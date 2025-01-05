@@ -17,7 +17,7 @@ I'm using it to save bookmarks in [Obsidian](https://obsidian.md/), so you'll se
 
 - Ensure [uv](https://docs.astral.sh/uv/) is installed
 - Ensure [Node.js](https://nodejs.org/) is installed (optional, required for Readability.js, see below for options)
-- Download [grabit.py](https://raw.githubusercontent.com/vladiliescu/grabit/refs/heads/main/grabit.py) to a local folder on your machine, e.g. `~/scripts`.
+- Download [grabit.py](https://github.com/vladiliescu/grabit/releases/latest/download/grabit.py) to a local folder on your machine, e.g. `~/scripts`.
 
 ## Usage
 
