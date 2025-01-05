@@ -54,22 +54,19 @@ def should_output_file(output_formats):
 @click.command()
 @click.argument("url")
 @click.option(
-    "--yaml-frontmatter",
-    is_flag=True,
+    "--yaml-frontmatter/--no-yaml-frontmatter",
     default=True,
     help="Include YAML front matter with metadata.",
     show_default=True,
 )
 @click.option(
-    "--include-title",
-    is_flag=True,
+    "--include-title/--no-include-title",
     default=True,
     help="Include the page title as an H1 heading.",
     show_default=True,
 )
 @click.option(
-    "--include-source",
-    is_flag=True,
+    "--include-source/--no-include-source",
     default=False,
     help="Include the page source.",
     show_default=True,
@@ -81,15 +78,13 @@ def should_output_file(output_formats):
     show_default=True,
 )
 @click.option(
-    "--use-readability-js",
-    is_flag=True,
+    "--use-readability-js/--no-use-readability-js",
     default=True,
     help="Use Readability.js for processing pages, requires Node to be installed (recommended).",
     show_default=True,
 )
 @click.option(
-    "--create-domain-subdir",
-    is_flag=True,
+    "--create-domain-subdir/--no-create-domain-subdir",
     default=True,
     help="Save the resulting file(s) in a subdirectory named after the domain.",
     show_default=True,
