@@ -2,40 +2,47 @@
 # dependencies = [
 # ]
 # ///
+import os
 import re
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from urllib.parse import urlparse
 
 import click
 import requests
-from readabilipy import simple_json_from_html_string
-from markdownify import ATX, abstract_inline_conversion, UNDERSCORE
-from urllib.parse import urlparse
-from datetime import datetime
-import os
 import yaml
-import sys
+from click import ClickException
+from markdownify import ATX, UNDERSCORE, MarkdownConverter, abstract_inline_conversion
+from readabilipy import simple_json_from_html_string
+from requests import RequestException
 from text_unidecode import unidecode
-from markdownify import MarkdownConverter
 
-FORMAT_MD = "md"
-FORMAT_STDOUT_MD = "stdout.md"
-FORMAT_READABLE_HTML = "html"
-FORMAT_RAW_HTML = "raw.html"
+
+class OutputFormat(Enum):
+    MD = "md"
+    STDOUT_MD = "stdout.md"
+    READABLE_HTML = "html"
+    RAW_HTML = "raw.html"
+
+    def __str__(self):
+        return self.value
 
 
 def should_output_raw_html(output_formats):
-    return FORMAT_RAW_HTML in output_formats
+    return OutputFormat.RAW_HTML in output_formats
 
 
 def should_output_readable_html(output_formats):
-    return FORMAT_READABLE_HTML in output_formats
+    return OutputFormat.READABLE_HTML in output_formats
 
 
 def should_output_markdown(output_formats):
-    return FORMAT_MD in output_formats or FORMAT_STDOUT_MD in output_formats
+    return OutputFormat.MD in output_formats or OutputFormat.STDOUT_MD in output_formats
 
 
 def should_output_file(output_formats):
-    return any("stdout" not in fmt for fmt in output_formats)
+    return any("stdout" not in fmt.value for fmt in output_formats)
 
 
 @click.command()
@@ -79,38 +86,39 @@ def should_output_file(output_formats):
     "--format",
     "output_formats",
     multiple=True,
-    default=[FORMAT_MD],
+    default=[OutputFormat.MD.value],
     type=click.Choice(
-        [FORMAT_MD, FORMAT_STDOUT_MD, FORMAT_READABLE_HTML, FORMAT_RAW_HTML],
+        [fmt.value for fmt in OutputFormat],
         case_sensitive=False,
     ),
     help="Output format(s) to save the content in. Can be specified multiple times i.e. -f md -f html",
     show_default=True,
 )
 def save(
-    url,
-    use_readability_js,
-    yaml_frontmatter,
-    include_title,
-    include_source,
-    fallback_title,
-    output_formats,
+    url: str,
+    use_readability_js: bool,
+    yaml_frontmatter: bool,
+    include_title: bool,
+    include_source: bool,
+    fallback_title: str,
+    output_formats: list[str],
 ):
     """
     Download an URL, convert it to Markdown with specified options, and save it to a file.
     """
 
+    output_formats = [OutputFormat(format_str) for format_str in output_formats]
     content_formats = {}
 
     html_content = download_html_content(url)
     if should_output_raw_html(output_formats):
-        content_formats[FORMAT_RAW_HTML] = html_content
+        content_formats[OutputFormat.RAW_HTML] = html_content
 
     html_readable_content, title = extract_readable_content_and_title(
         html_content, use_readability_js
     )
     if should_output_readable_html(output_formats):
-        content_formats[FORMAT_READABLE_HTML] = html_readable_content
+        content_formats[OutputFormat.READABLE_HTML] = html_readable_content
 
     title = handle_missing_title(fallback_title, title)
     title = unidecode(title)
@@ -124,8 +132,8 @@ def save(
             markdown_content, yaml_frontmatter, title, url
         )
 
-        content_formats[FORMAT_MD] = markdown_content
-        content_formats[FORMAT_STDOUT_MD] = markdown_content
+        content_formats[OutputFormat.MD] = markdown_content
+        content_formats[OutputFormat.STDOUT_MD] = markdown_content
 
     if should_output_file(output_formats):
         output_dir = create_output_dir(url)
@@ -133,11 +141,12 @@ def save(
 
     for fmt in output_formats:
         content = content_formats[fmt]
-        if "stdout" in fmt:
-            click.echo(content)
-        else:
+
+        if should_output_file([fmt]):
             # output_dir and safe_title are only defined if we're saving to a file
             write_to_file(content, output_dir, safe_title, fmt)
+        else:
+            click.echo(content)
 
 
 def sanitize_filename(filename):
@@ -173,14 +182,14 @@ def try_add_yaml_frontmatter(markdown_content, yaml_frontmatter, title, url):
 
 
 def write_to_file(markdown_content, output_dir, safe_title, extension):
-    output_file = os.path.join(output_dir, f"{safe_title}.{extension}")
+    output_file = Path(output_dir) / f"{safe_title}.{extension}"
+
     try:
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(markdown_content)
         click.echo(f"Saved {extension} content to {output_file}")
     except Exception as e:
-        click.echo(f"Error writing to file {output_file}: {e}", err=True)
-        sys.exit(1)
+        raise ClickException(f"Error writing to file {output_file}: {e}")
 
 
 def create_output_dir(url):
@@ -240,8 +249,7 @@ def extract_readable_content_and_title(html_content, use_readability_js):
         )  # Fix for readability replacing ".." with "about:blank"
         title = rpy.get("title", "").strip()
     except Exception as e:
-        click.echo(f"Error processing HTML content: {e}", err=True)
-        sys.exit(1)
+        raise ClickException(f"Error processing HTML content: {e}")
     return (
         content_html,
         title,
@@ -253,9 +261,8 @@ def download_html_content(url):
         response = requests.get(url)
         response.raise_for_status()
         html_content = response.text
-    except requests.RequestException as e:
-        click.echo(f"Error downloading {url}: {e}", err=True)
-        sys.exit(1)
+    except RequestException as e:
+        raise ClickException(f"Error downloading {url}: {e}")
     return html_content
 
 

@@ -1,4 +1,5 @@
 import pytest
+
 from grabit import sanitize_filename
 
 
