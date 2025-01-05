@@ -2,7 +2,6 @@
 # dependencies = [
 # ]
 # ///
-import os
 import re
 from datetime import datetime
 from enum import Enum
@@ -82,6 +81,13 @@ def should_output_file(output_formats):
     show_default=True,
 )
 @click.option(
+    "--create-domain-subdir",
+    is_flag=True,
+    default=True,
+    help="Save the resulting file(s) in a subdirectory named after the domain.",
+    show_default=True,
+)
+@click.option(
     "-f",
     "--format",
     "output_formats",
@@ -101,6 +107,7 @@ def save(
     include_title: bool,
     include_source: bool,
     fallback_title: str,
+    create_domain_subdir: bool,
     output_formats: list[str],
 ):
     """
@@ -136,7 +143,10 @@ def save(
         content_formats[OutputFormat.STDOUT_MD] = markdown_content
 
     if should_output_file(output_formats):
-        output_dir = create_output_dir(url)
+        if create_domain_subdir:
+            output_dir = create_output_dir(url)
+        else:
+            output_dir = Path(".")
         safe_title = sanitize_filename(title)
 
     for fmt in output_formats:
@@ -197,8 +207,9 @@ def create_output_dir(url):
     domain = parsed_url.netloc.replace("www.", "")
     if not domain:
         domain = "unknown_domain"
-    output_dir = os.path.join(os.getcwd(), domain)
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = Path(".") / domain
+    output_dir.mkdir(exist_ok=True, parents=True)
+
     return output_dir
 
 
