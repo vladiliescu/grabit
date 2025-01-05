@@ -24,36 +24,44 @@ from markdownify import MarkdownConverter
     is_flag=True,
     default=True,
     help="Include YAML front matter with metadata.",
+    show_default=True,
 )
 @click.option(
     "--include-title",
     is_flag=True,
     default=True,
     help="Include the page title as an H1 heading.",
+    show_default=True,
 )
 @click.option(
     "--include-source",
     is_flag=True,
     default=False,
     help="Include the page source.",
+    show_default=True,
 )
 @click.option(
     "--fallback-title",
     default="webclip {date}",
     help="Fallback title if no title is found. Use {date} for current date.",
+    show_default=True,
 )
 @click.option(
     "--use-readability-js",
     is_flag=True,
     default=True,
     help="Use Readability.js for processing pages, requires Node to be installed (recommended).",
+    show_default=True,
 )
 @click.option(
+    "-f",
     "--format",
     "output_formats",
     multiple=True,
     default=["md"],
-    help="Output format(s) to save the content in (md, html, raw.html). Can be specified multiple times i.e. --format md --format html",
+    type=click.Choice(["md", "stdout.md", "html", "raw.html"], case_sensitive=False),
+    help="Output format(s) to save the content in. Can be specified multiple times i.e. -f md -f html",
+    show_default=True,
 )
 def save(
     url,
@@ -89,16 +97,17 @@ def save(
 
     content_formats = {
         "md": markdown_content,
+        "stdout.md": markdown_content,
         "html": html_readable_content,
         "raw.html": html_content,
     }
 
     for fmt in output_formats:
-        if fmt not in content_formats:
-            click.echo(f"Invalid format: {fmt}", err=True)
-            continue
-
-        write_to_file(content_formats[fmt], output_dir, safe_title, fmt)
+        content = content_formats[fmt]
+        if "stdout" in fmt:
+            click.echo(content)
+        else:
+            write_to_file(content, output_dir, safe_title, fmt)
 
 
 def sanitize_filename(filename):
