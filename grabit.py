@@ -16,6 +16,27 @@ import sys
 from text_unidecode import unidecode
 from markdownify import MarkdownConverter
 
+FORMAT_MD = "md"
+FORMAT_STDOUT_MD = "stdout.md"
+FORMAT_READABLE_HTML = "html"
+FORMAT_RAW_HTML = "raw.html"
+
+
+def should_output_raw_html(output_formats):
+    return FORMAT_RAW_HTML in output_formats
+
+
+def should_output_readable_html(output_formats):
+    return FORMAT_READABLE_HTML in output_formats
+
+
+def should_output_markdown(output_formats):
+    return FORMAT_MD in output_formats or FORMAT_STDOUT_MD in output_formats
+
+
+def should_output_file(output_formats):
+    return any("stdout" not in fmt for fmt in output_formats)
+
 
 @click.command()
 @click.argument("url")
@@ -42,7 +63,7 @@ from markdownify import MarkdownConverter
 )
 @click.option(
     "--fallback-title",
-    default="webclip {date}",
+    default="Untitled {date}",
     help="Fallback title if no title is found. Use {date} for current date.",
     show_default=True,
 )
@@ -58,8 +79,11 @@ from markdownify import MarkdownConverter
     "--format",
     "output_formats",
     multiple=True,
-    default=["md"],
-    type=click.Choice(["md", "stdout.md", "html", "raw.html"], case_sensitive=False),
+    default=[FORMAT_MD],
+    type=click.Choice(
+        [FORMAT_MD, FORMAT_STDOUT_MD, FORMAT_READABLE_HTML, FORMAT_RAW_HTML],
+        case_sensitive=False,
+    ),
     help="Output format(s) to save the content in. Can be specified multiple times i.e. -f md -f html",
     show_default=True,
 )
@@ -73,40 +97,46 @@ def save(
     output_formats,
 ):
     """
-    Download a URL, convert it to Markdown with specified options, and save it to a file.
+    Download an URL, convert it to Markdown with specified options, and save it to a file.
     """
 
+    content_formats = {}
+
     html_content = download_html_content(url)
+    if should_output_raw_html(output_formats):
+        content_formats[FORMAT_RAW_HTML] = html_content
+
     html_readable_content, title = extract_readable_content_and_title(
         html_content, use_readability_js
     )
+    if should_output_readable_html(output_formats):
+        content_formats[FORMAT_READABLE_HTML] = html_readable_content
+
     title = handle_missing_title(fallback_title, title)
     title = unidecode(title)
 
-    markdown_content = convert_to_markdown(html_readable_content)
+    if should_output_markdown(output_formats):
+        markdown_content = convert_to_markdown(html_readable_content)
 
-    markdown_content = try_include_source(include_source, markdown_content, url)
-    markdown_content = try_include_title(include_title, markdown_content, title)
-    markdown_content = try_add_yaml_frontmatter(
-        markdown_content, yaml_frontmatter, title, url
-    )
+        markdown_content = try_include_source(include_source, markdown_content, url)
+        markdown_content = try_include_title(include_title, markdown_content, title)
+        markdown_content = try_add_yaml_frontmatter(
+            markdown_content, yaml_frontmatter, title, url
+        )
 
-    output_dir = create_output_dir(url)
+        content_formats[FORMAT_MD] = markdown_content
+        content_formats[FORMAT_STDOUT_MD] = markdown_content
 
-    safe_title = sanitize_filename(title)
-
-    content_formats = {
-        "md": markdown_content,
-        "stdout.md": markdown_content,
-        "html": html_readable_content,
-        "raw.html": html_content,
-    }
+    if should_output_file(output_formats):
+        output_dir = create_output_dir(url)
+        safe_title = sanitize_filename(title)
 
     for fmt in output_formats:
         content = content_formats[fmt]
         if "stdout" in fmt:
             click.echo(content)
         else:
+            # output_dir and safe_title are only defined if we're saving to a file
             write_to_file(content, output_dir, safe_title, fmt)
 
 
