@@ -7,6 +7,7 @@
 #   "PyYAML==6.0.2",
 #   "requests==2.32.3",
 #   "text-unidecode==1.3",
+#   "mdformat==0.7.21",
 # ]
 # ///
 import re
@@ -20,6 +21,7 @@ import requests
 import yaml
 from click import ClickException
 from markdownify import ATX, UNDERSCORE, MarkdownConverter, abstract_inline_conversion
+from mdformat import text as mdformat_text
 from readabilipy import simple_json_from_html_string
 from requests import RequestException
 from text_unidecode import unidecode
@@ -241,7 +243,8 @@ class GrabitConverter(MarkdownConverter):
 def convert_to_markdown(content_html):
     converter = GrabitConverter(heading_style=ATX, bullets="-")
     markdown_content = converter.convert(content_html)
-    return markdown_content
+    pretty_markdown_content = mdformat_text(markdown_content)
+    return pretty_markdown_content
 
 
 def handle_missing_title(fallback_title, title):
