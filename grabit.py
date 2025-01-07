@@ -55,6 +55,7 @@ def should_output_file(output_formats):
 
 @click.command()
 @click.argument("url")
+@click.version_option(version="0.6.1")
 @click.option(
     "--yaml-frontmatter/--no-yaml-frontmatter",
     default=True,
