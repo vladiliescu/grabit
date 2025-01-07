@@ -26,6 +26,8 @@ from readabilipy import simple_json_from_html_string
 from requests import RequestException
 from text_unidecode import unidecode
 
+VERSION = "0.6.2"
+
 
 class OutputFormat(Enum):
     MD = "md"
@@ -55,7 +57,7 @@ def should_output_file(output_formats):
 
 @click.command()
 @click.argument("url")
-@click.version_option(version="0.6.1")
+@click.version_option(version=VERSION, prog_name="Grabit")
 @click.option(
     "--yaml-frontmatter/--no-yaml-frontmatter",
     default=True,
