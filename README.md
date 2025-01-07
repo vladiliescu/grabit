@@ -33,7 +33,9 @@ uv run -q <download-path>/grabit.py [OPTIONS] URL
 - `--fallback-title TEXT`: Fallback title if no title is found. Use `{date}` for the current date (default: `Untitled {date}`).
 - `--use-readability-js / --no-use-readability-js`: Use Readability.js for processing pages. Disabling it will result in **some** processing courtesy of [ReadabiliPy](https://github.com/alan-turing-institute/ReadabiliPy), but it doesn't look so great to be honest (requires Node.js, default: `enabled`).
 - `--create-domain-subdir / --no-create-domain-subdir`: Save the resulting files in a subdirectory named after the domain. Useful when saving a **lot** of bookmarks in the same Obsidian vault (default: `enabled`).
+- `--overwrite / --no-overwrite`: Overwrite existing files.(default: `disabled`).
 - `-f, --format [md|stdout.md|html|raw.html]`: Output format(s) to save the content in. Most useful are `md`, which saves the content to a Markdown file, and `stdout.md` which simply outputs the raw content so you can pipe it to something else, like the clipboard or Simon Willison's [llm cli](https://github.com/simonw/llm). Can be specified multiple times (default: `md`).
+
 
 ### Examples
 

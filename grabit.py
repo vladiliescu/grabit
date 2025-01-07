@@ -92,6 +92,12 @@ def should_output_file(output_formats):
     show_default=True,
 )
 @click.option(
+    "--overwrite/--no-overwrite",
+    default=False,
+    help="Overwrite existing files if they already exist.",
+    show_default=True,
+)
+@click.option(
     "-f",
     "--format",
     "output_formats",
@@ -113,6 +119,7 @@ def save(
     fallback_title: str,
     create_domain_subdir: bool,
     output_formats: list[str],
+    overwrite: bool,
 ):
     """
     Download an URL, convert it to Markdown with specified options, and save it to a file.
@@ -158,7 +165,7 @@ def save(
 
         if should_output_file([fmt]):
             # output_dir and safe_title are only defined if we're saving to a file
-            write_to_file(content, output_dir, safe_title, fmt)
+            write_to_file(content, output_dir, safe_title, fmt, overwrite)
         else:
             click.echo(content)
 
@@ -195,8 +202,18 @@ def try_add_yaml_frontmatter(markdown_content, yaml_frontmatter, title, url):
     return markdown_content
 
 
-def write_to_file(markdown_content, output_dir, safe_title, extension):
+def write_to_file(
+    markdown_content: str,
+    output_dir: str,
+    safe_title: str,
+    extension: str,
+    overwrite: bool,
+):
     output_file = Path(output_dir) / f"{safe_title}.{extension}"
+
+    if not overwrite and output_file.exists():
+        click.echo(f"File {output_file} already exists. Use --overwrite to replace it.")
+        return
 
     try:
         with open(output_file, "w", encoding="utf-8") as f:
