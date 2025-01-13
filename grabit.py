@@ -225,7 +225,11 @@ grabbers = [RedditGrabber()]
 
 @click.command()
 @click.argument("url")
-@click.version_option(version=VERSION, prog_name="Grabit")
+@click.version_option(
+    version=VERSION,
+    prog_name="Grabit",
+    message="%(prog)s version %(version)s\n© 2025 Vlad Iliescu, licensed under the GPL v3 License (https://www.gnu.org/licenses/gpl-3.0.html)",
+)
 @click.option(
     "--yaml-frontmatter/--no-yaml-frontmatter",
     default=True,
