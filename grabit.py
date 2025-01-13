@@ -403,18 +403,6 @@ class GrabitMarkdownConverter(MarkdownConverter):
         """I like my bolds ** and my italics _."""
         return abstract_inline_conversion(lambda s: UNDERSCORE)(self, el, text, convert_as_inline)
 
-    def _convert_hn(self, n: int, el: any, text: str, convert_as_inline: bool) -> str:
-        header = super()._convert_hn(n, el, text, convert_as_inline)
-
-        if convert_as_inline:
-            return header
-
-        # Add newline if the header doesn't start with one
-        if not re.search(r"^\n", text):
-            return "\n" + header
-
-        return header
-
 
 def convert_to_markdown(content_html):
     converter = GrabitMarkdownConverter(heading_style=ATX, bullets="-")
