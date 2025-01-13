@@ -10,11 +10,13 @@
 #   "mdformat==0.7.21",
 # ]
 # ///
+import json
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import click
 import requests
@@ -26,7 +28,7 @@ from readabilipy import simple_json_from_html_string
 from requests import RequestException
 from text_unidecode import unidecode
 
-VERSION = "0.6.2"
+VERSION = "0.7.0"
 
 
 class OutputFormat(Enum):
@@ -53,6 +55,171 @@ def should_output_markdown(output_formats):
 
 def should_output_file(output_formats):
     return any("stdout" not in fmt.value for fmt in output_formats)
+
+
+@dataclass
+class RenderFlags:
+    include_source: bool
+    include_title: bool
+    yaml_frontmatter: bool
+
+
+@dataclass
+class OutputFlags:
+    output_formats: list[OutputFormat]
+    create_domain_subdir: bool
+    overwrite: bool
+
+
+class BaseGrabber:
+    def can_handle(self, url: str):
+        return True
+
+    def grab(
+        self,
+        url: str,
+        use_readability_js: bool,
+        fallback_title: str,
+        render_flags: RenderFlags,
+        output_formats: list[OutputFormat],
+    ) -> (str, dict[OutputFormat, str]):
+        outputs = {}
+
+        html_content = download_html_content(url)
+        if should_output_raw_html(output_formats):
+            outputs[OutputFormat.RAW_HTML] = html_content
+
+        html_readable_content, title = extract_readable_content_and_title(html_content, use_readability_js)
+        title = self.post_process_title(title, fallback_title)
+
+        if should_output_readable_html(output_formats):
+            outputs[OutputFormat.READABLE_HTML] = html_readable_content
+
+        if should_output_markdown(output_formats):
+            markdown_content = convert_to_markdown(html_readable_content)
+            markdown_content = self.post_process_markdown(url, title, markdown_content, render_flags)
+
+            outputs[OutputFormat.MD] = markdown_content
+            outputs[OutputFormat.STDOUT_MD] = markdown_content
+
+        return title, outputs
+
+    def render_markdown(self, markdown_content):
+        return markdown_content
+
+    def handle_missing_title(self, title: str, fallback_title: str):
+        if not title:
+            title = fallback_title.format(date=datetime.now().strftime("%Y-%m-%d"))
+
+        return title
+
+    def post_process_markdown(
+        self,
+        url: str,
+        title: str,
+        markdown_content: str,
+        render_flags: RenderFlags,
+    ):
+        markdown_content = try_include_source(render_flags.include_source, markdown_content, url)
+        markdown_content = try_include_title(render_flags.include_title, markdown_content, title)
+        markdown_content = try_add_yaml_frontmatter(render_flags.yaml_frontmatter, markdown_content, title, url)
+
+        return markdown_content
+
+    def post_process_title(self, title: str, fallback_title: str):
+        title = self.handle_missing_title(title, fallback_title)
+        title = unidecode(title)
+
+        return title
+
+
+class RedditGrabber(BaseGrabber):
+    def can_handle(self, url: str):
+        domain = urlparse(url).netloc.lower()
+        return domain == "www.reddit.com" or domain == "old.reddit.com"
+
+    def grab(
+        self,
+        url: str,
+        use_readability_js: bool,
+        fallback_title: str,
+        render_flags: RenderFlags,
+        output_formats: list[OutputFormat],
+    ) -> (str, dict[OutputFormat, str]):
+        if (
+            should_output_raw_html(output_formats)
+            or should_output_readable_html(output_formats)
+            or not should_output_markdown(output_formats)
+        ):
+            raise ClickException("Reddit posts can only be converted to Markdown.")
+
+        outputs = {}
+
+        json_url = self._convert_to_json_url(url)
+        json_content = json.loads(download_html_content(json_url))
+
+        title = json_content[0]["data"]["children"][0]["data"].get("title", None)
+        title = self.post_process_title(title, fallback_title)
+
+        markdown_content = self._reddit_json_to_markdown(json_content)
+        markdown_content = self.post_process_markdown(url, title, markdown_content, render_flags)
+
+        outputs[OutputFormat.MD] = markdown_content
+        outputs[OutputFormat.STDOUT_MD] = markdown_content
+
+        return title, outputs
+
+    def _convert_to_json_url(self, url):
+        parsed_url = urlparse(url)
+
+        path = parsed_url.path.rstrip("/")
+        new_path = f"{path}.json"
+
+        json_url = urlunparse(parsed_url._replace(path=new_path))
+        return json_url
+
+    def _reddit_json_to_markdown(self, reddit_post_json):
+        def parse_comments(comments_data, depth=0):
+            comments_md = ""
+            # Sort comments by score, highest first
+            sorted_comments = sorted(comments_data, key=lambda x: x["data"].get("score", 0), reverse=True)
+            for comment in sorted_comments:
+                comment_data = comment["data"]
+                author = comment_data.get("author", "[deleted]")
+                score = comment_data.get("score", 0)
+                body = comment_data.get("body", "").replace("\n", "\n" + "    " * (depth + 1))
+                indentation = "    " * depth
+
+                comments_md += f"{indentation}- **{author}** [{score} score]:\n{indentation}    {body}\n\n"
+
+                # Check if 'replies' is a dict (has replies), and recursively parse them
+                if isinstance(comment_data.get("replies"), dict):
+                    nested_comments = comment_data["replies"]["data"]["children"]
+                    comments_md += parse_comments(nested_comments, depth + 1)
+
+            return comments_md
+
+        try:
+            # Extract post information
+            post_data = reddit_post_json[0]["data"]["children"][0]["data"]
+            selftext = post_data.get("selftext", "").replace("\n", "\n> ")
+            author = post_data.get("author", "[deleted]")
+            score = post_data.get("score", 0)
+
+            markdown = f"**{author}** [{score} score]:\n> {selftext}\n\n"
+
+            # Extract comments
+            comments_data = reddit_post_json[1]["data"]["children"]
+            markdown += "## Comments\n\n"
+            markdown += parse_comments(comments_data)
+
+        except Exception as e:
+            raise ClickException(f"Error converting Reddit JSON to Markdown: {e}")
+
+        return markdown
+
+
+grabbers = [RedditGrabber()]
 
 
 @click.command()
@@ -128,47 +295,37 @@ def save(
     Download an URL, convert it to Markdown with specified options, and save it to a file.
     """
 
+    grabber = next((g for g in grabbers if g.can_handle(url)), BaseGrabber())
     output_formats = [OutputFormat(format_str) for format_str in output_formats]
-    content_formats = {}
 
-    html_content = download_html_content(url)
-    if should_output_raw_html(output_formats):
-        content_formats[OutputFormat.RAW_HTML] = html_content
-
-    html_readable_content, title = extract_readable_content_and_title(
-        html_content, use_readability_js
+    render_flags = RenderFlags(
+        include_source=include_source,
+        include_title=include_title,
+        yaml_frontmatter=yaml_frontmatter,
     )
-    if should_output_readable_html(output_formats):
-        content_formats[OutputFormat.READABLE_HTML] = html_readable_content
+    output_flags = OutputFlags(
+        output_formats=output_formats,
+        create_domain_subdir=create_domain_subdir,
+        overwrite=overwrite,
+    )
 
-    title = handle_missing_title(fallback_title, title)
-    title = unidecode(title)
+    title, outputs = grabber.grab(url, use_readability_js, fallback_title, render_flags, output_formats)
+    output(title, outputs, url, output_flags)
 
-    if should_output_markdown(output_formats):
-        markdown_content = convert_to_markdown(html_readable_content)
 
-        markdown_content = try_include_source(include_source, markdown_content, url)
-        markdown_content = try_include_title(include_title, markdown_content, title)
-        markdown_content = try_add_yaml_frontmatter(
-            markdown_content, yaml_frontmatter, title, url
-        )
-
-        content_formats[OutputFormat.MD] = markdown_content
-        content_formats[OutputFormat.STDOUT_MD] = markdown_content
-
-    if should_output_file(output_formats):
-        if create_domain_subdir:
+def output(title: str, outputs: dict[OutputFormat, str], url: str, output_flags: OutputFlags):
+    if should_output_file(outputs):
+        if output_flags.create_domain_subdir:
             output_dir = create_output_dir(url)
         else:
             output_dir = Path(".")
         safe_title = sanitize_filename(title)
 
-    for fmt in output_formats:
-        content = content_formats[fmt]
-
+    for fmt in output_flags.output_formats:
+        content = outputs.get(fmt)
         if should_output_file([fmt]):
             # output_dir and safe_title are only defined if we're saving to a file
-            write_to_file(content, output_dir, safe_title, fmt, overwrite)
+            write_to_file(content, output_dir, safe_title, fmt, output_flags.overwrite)
         else:
             click.echo(content)
 
@@ -190,7 +347,7 @@ def try_include_source(include_source, markdown_content, url):
     return markdown_content
 
 
-def try_add_yaml_frontmatter(markdown_content, yaml_frontmatter, title, url):
+def try_add_yaml_frontmatter(yaml_frontmatter: bool, markdown_content, title, url):
     if not yaml_frontmatter:
         return markdown_content
 
@@ -237,15 +394,13 @@ def create_output_dir(url):
     return output_dir
 
 
-class GrabitConverter(MarkdownConverter):
+class GrabitMarkdownConverter(MarkdownConverter):
     def convert_em(self, el, text, convert_as_inline):
         return self.convert_i(el, text, convert_as_inline)
 
     def convert_i(self, el, text, convert_as_inline):
         """I like my bolds ** and my italics _."""
-        return abstract_inline_conversion(lambda s: UNDERSCORE)(
-            self, el, text, convert_as_inline
-        )
+        return abstract_inline_conversion(lambda s: UNDERSCORE)(self, el, text, convert_as_inline)
 
     def _convert_hn(self, n: int, el: any, text: str, convert_as_inline: bool) -> str:
         header = super()._convert_hn(n, el, text, convert_as_inline)
@@ -261,24 +416,15 @@ class GrabitConverter(MarkdownConverter):
 
 
 def convert_to_markdown(content_html):
-    converter = GrabitConverter(heading_style=ATX, bullets="-")
+    converter = GrabitMarkdownConverter(heading_style=ATX, bullets="-")
     markdown_content = converter.convert(content_html)
     pretty_markdown_content = mdformat_text(markdown_content)
     return pretty_markdown_content
 
 
-def handle_missing_title(fallback_title, title):
-    if not title:
-        title = fallback_title.format(date=datetime.now().strftime("%Y-%m-%d"))
-
-    return title
-
-
 def extract_readable_content_and_title(html_content, use_readability_js):
     try:
-        rpy = simple_json_from_html_string(
-            html_content, use_readability=use_readability_js
-        )
+        rpy = simple_json_from_html_string(html_content, use_readability=use_readability_js)
         content_html = rpy.get("content", "")
 
         # If readability.js fails, try again without it
