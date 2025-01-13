@@ -203,10 +203,11 @@ class RedditGrabber(BaseGrabber):
             # Extract post information
             post_data = reddit_post_json[0]["data"]["children"][0]["data"]
             selftext = post_data.get("selftext", "").replace("\n", "\n> ")
+            post_url = post_data.get("url", "")  # needed for link posts
             author = post_data.get("author", "[deleted]")
             score = post_data.get("score", 0)
 
-            markdown = f"**{author}** [{score} score]:\n> {selftext}\n\n"
+            markdown = f"**{author}** [{score} score]:\n> {selftext if selftext else post_url  }\n\n"
 
             # Extract comments
             comments_data = reddit_post_json[1]["data"]["children"]
