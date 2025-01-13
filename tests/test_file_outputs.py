@@ -13,3 +13,7 @@ from grabit import sanitize_filename
 )
 def test_sanitize_filename_should_work(input_filename, expected_output):
     assert sanitize_filename(input_filename) == expected_output
+
+
+def test_sanitize_filename_should_not_create_hidden_files():
+    assert sanitize_filename(".NET Core") == "NET Core"

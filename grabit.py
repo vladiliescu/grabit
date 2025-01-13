@@ -337,6 +337,7 @@ def output(title: str, outputs: dict[OutputFormat, str], url: str, output_flags:
 
 def sanitize_filename(filename):
     sanitized = re.sub(r'[<>:"/\\|?*]', "_", filename)
+    sanitized = sanitized.lstrip(".")
     return sanitized
 
 
