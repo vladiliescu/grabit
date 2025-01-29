@@ -72,7 +72,7 @@ class OutputFlags:
 
 
 class BaseGrabber:
-    def can_handle(self, url: str):
+    def can_handle(self, url: str) -> bool:
         return True
 
     def grab(
@@ -134,7 +134,7 @@ class BaseGrabber:
 
 
 class RedditGrabber(BaseGrabber):
-    def can_handle(self, url: str):
+    def can_handle(self, url: str) -> bool:
         domain = urlparse(url).netloc.lower()
         return domain == "www.reddit.com" or domain == "old.reddit.com"
 
@@ -419,7 +419,7 @@ def convert_to_markdown(content_html):
 def extract_readable_content_and_title(html_content, use_readability_js):
     try:
         rpy = simple_json_from_html_string(html_content, use_readability=use_readability_js)
-        content_html = rpy.get("content", "")
+        content_html = rpy.get("content") or ""
 
         # If readability.js fails, try again without it
         if not content_html and use_readability_js:
@@ -431,7 +431,7 @@ def extract_readable_content_and_title(html_content, use_readability_js):
         content_html = content_html.replace(
             'href="about:blank/', 'href="../'
         )  # Fix for readability replacing ".." with "about:blank"
-        title = rpy.get("title", "").strip()
+        title = (rpy.get("title") or "").strip()
     except Exception as e:
         raise ClickException(f"Error processing HTML content: {e}")
     return (
