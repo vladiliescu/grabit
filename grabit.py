@@ -78,6 +78,7 @@ class BaseGrabber:
     def grab(
         self,
         url: str,
+        user_agent: str,
         use_readability_js: bool,
         fallback_title: str,
         render_flags: RenderFlags,
@@ -85,7 +86,7 @@ class BaseGrabber:
     ) -> (str, dict[OutputFormat, str]):
         outputs = {}
 
-        html_content = download_html_content(url)
+        html_content = download_html_content(url, user_agent)
         if should_output_raw_html(output_formats):
             outputs[OutputFormat.RAW_HTML] = html_content
 
@@ -141,6 +142,7 @@ class RedditGrabber(BaseGrabber):
     def grab(
         self,
         url: str,
+        user_agent: str,
         use_readability_js: bool,
         fallback_title: str,
         render_flags: RenderFlags,
@@ -156,7 +158,7 @@ class RedditGrabber(BaseGrabber):
         outputs = {}
 
         json_url = self._convert_to_json_url(url)
-        json_content = json.loads(download_html_content(json_url))
+        json_content = json.loads(download_html_content(json_url, user_agent))
 
         title = json_content[0]["data"]["children"][0]["data"].get("title", None)
         title = self.post_process_title(title, fallback_title)
@@ -225,6 +227,12 @@ grabbers = [RedditGrabber()]
 
 @click.command()
 @click.argument("url")
+@click.option(
+    "--user-agent",
+    default=f"Grabit/{VERSION}",
+    help="The user agent reported when retrieving web pages",
+    show_default=True,
+)
 @click.version_option(
     version=VERSION,
     prog_name="Grabit",
@@ -282,11 +290,12 @@ grabbers = [RedditGrabber()]
         [fmt.value for fmt in OutputFormat],
         case_sensitive=False,
     ),
-    help="Output format(s) to save the content in. Can be specified multiple times i.e. -f md -f html",
+    help="Which output format(s) to use when saving the content. Can be specified multiple times i.e. -f md -f html",
     show_default=True,
 )
 def save(
     url: str,
+    user_agent: str,
     use_readability_js: bool,
     yaml_frontmatter: bool,
     include_title: bool,
@@ -314,7 +323,7 @@ def save(
         overwrite=overwrite,
     )
 
-    title, outputs = grabber.grab(url, use_readability_js, fallback_title, render_flags, output_formats)
+    title, outputs = grabber.grab(url, user_agent, use_readability_js, fallback_title, render_flags, output_formats)
     output(title, outputs, url, output_flags)
 
 
@@ -440,9 +449,15 @@ def extract_readable_content_and_title(html_content, use_readability_js):
     )
 
 
-def download_html_content(url):
+def download_html_content(url, user_agent: str) -> str:
     try:
-        response = requests.get(url)
+        request_headers = {
+            "User-Agent": user_agent,
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+        }
+
+        response = requests.get(url, headers=request_headers)
         response.raise_for_status()
         html_content = response.text
     except RequestException as e:
