@@ -28,7 +28,7 @@ from readabilipy import simple_json_from_html_string
 from requests import RequestException
 from text_unidecode import unidecode
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 
 
 class OutputFormat(Enum):
