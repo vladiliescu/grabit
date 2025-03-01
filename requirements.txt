@@ -1,6 +1,6 @@
 click>=8.1.0,<8.2
 readabilipy==0.3.0
-markdownify==0.14.1
+markdownify==1.0.0
 PyYAML==6.0.2
 requests==2.32.3
 text-unidecode==1.3
