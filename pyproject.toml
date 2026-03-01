@@ -29,7 +29,7 @@ clipit = "clipit.cli:main"
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=1.1.0",
-    "python-dotenv==1.1.1",
+    "python-dotenv==1.2.2",
     "ruff>=0.14.0",
 ]
 
