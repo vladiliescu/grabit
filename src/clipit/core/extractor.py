@@ -1,19 +1,30 @@
 from readabilipy import simple_json_from_html_string
 
 from clipit.core import ClipitError
+from clipit.core.readabilipy_runtime import ensure_readabilipy_node_runtime
 
 
 def extract_readable_content_and_title(html_content, use_readability_js):
     try:
-        rpy = simple_json_from_html_string(html_content, use_readability=use_readability_js)
-        content_html = rpy.get("content") or ""
+        use_readability = use_readability_js and ensure_readabilipy_node_runtime()
+        rpy = None
+        content_html = ""
 
-        # If readability.js fails, try again without it
-        if not content_html and use_readability_js:
+        if use_readability:
+            try:
+                rpy = simple_json_from_html_string(html_content, use_readability=True)
+                content_html = rpy.get("content") or ""
+            except Exception:
+                content_html = ""
+
+        if not content_html:
             rpy = simple_json_from_html_string(html_content, use_readability=False)
-            content_html = rpy.get("content", "")
+            content_html = rpy.get("content") or ""
             if not content_html:
                 raise ClipitError("No content found")
+
+        if rpy is None:
+            raise ClipitError("No content found")
 
         content_html = content_html.replace(
             'href="about:blank/', 'href="../'

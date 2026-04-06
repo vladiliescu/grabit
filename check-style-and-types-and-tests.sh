@@ -1,1 +1,1 @@
- uvx ty check && uv run ruff check --fix && uv run pytest
+ uvx ty check . && uvx ruff check . --fix && uv run pytest
