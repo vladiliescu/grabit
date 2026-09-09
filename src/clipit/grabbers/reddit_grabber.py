@@ -20,7 +20,7 @@ class RedditGrabber(BaseGrabber):
         fallback_title: str,
         render_flags: RenderFlags,
         output_formats: OutputFormatList,
-        _download_images: bool,
+        download_images: bool,
     ) -> tuple[str, dict[OutputFormat, str], list[tuple[str, bytes]]]:
         if (
             output_formats.should_output_raw_html()

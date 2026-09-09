@@ -16,7 +16,7 @@ def extract_image_urls(html_content: str, base_url: str) -> list[str]:
 
     for img_tag in soup.find_all("img"):
         src = img_tag.get("src")
-        if not src:
+        if not isinstance(src, str) or not src:
             continue
         if src.startswith("data:"):
             continue
@@ -82,7 +82,7 @@ def process_images(
 
     for img_tag in soup.find_all("img"):
         original_src = img_tag.get("src")
-        if not original_src:
+        if not isinstance(original_src, str) or not original_src:
             continue
         if original_src.startswith("data:"):
             continue
