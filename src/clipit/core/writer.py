@@ -32,7 +32,7 @@ def output(
             output_dir = create_output_dir(url)
         else:
             output_dir = Path(".")
-        safe_title = sanitize_filename(title)
+        safe_title = sanitize_filename(title) or "Untitled"
 
         if images:
             save_images(output_dir, images, output_flags.overwrite)

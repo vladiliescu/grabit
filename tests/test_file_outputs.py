@@ -8,6 +8,7 @@ from clipit.core.writer import output, sanitize_filename
     [
         ("invalid|file:name.txt", "invalidfilename.txt"),
         ("another/invalid\\name.txt", "anotherinvalidname.txt"),
+        ("0%, 50%, or 200%", "0, 50, or 200"),
         ("valid_name.txt", "valid_name.txt"),
     ],
 )
@@ -17,6 +18,20 @@ def test_sanitize_filename_should_work(input_filename, expected_output):
 
 def test_sanitize_filename_should_not_create_hidden_files():
     assert sanitize_filename(".NET Core") == "NET Core"
+
+
+def test_output_uses_fallback_when_sanitized_title_is_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    output(
+        title="%",
+        outputs={OutputFormat.MD: "# Title"},
+        url="https://example.com/article",
+        create_domain_subdir=False,
+        overwrite=True,
+    )
+
+    assert (tmp_path / "Untitled.md").exists()
 
 
 def test_output_saves_images_to_default_subfolder(tmp_path, monkeypatch):

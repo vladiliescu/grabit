@@ -50,6 +50,25 @@ def _generate_image_filename(url: str, used_filenames: set[str]) -> str:
     return candidate
 
 
+def _get_best_image_url(img_tag, base_url: str) -> str | None:
+    """Get the best quality image URL from an img tag, preferring srcset over src."""
+    srcset = img_tag.get("srcset")
+
+    if srcset:
+        # srcset format: "url1 descriptor1, url2 descriptor2, ..."
+        # Pick the last one which is typically the highest resolution
+        candidates = [c.strip().split()[0] for c in srcset.split(",") if c.strip()]
+        if candidates:
+            return urljoin(base_url, candidates[-1])
+
+    # Fall back to src attribute
+    src = img_tag.get("src")
+    if src:
+        return urljoin(base_url, src)
+
+    return None
+
+
 def process_images(
     html_content: str, title: str, base_url: str, user_agent: str | None
 ) -> tuple[str, list[tuple[str, bytes]]]:
