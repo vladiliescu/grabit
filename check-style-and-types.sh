@@ -1,1 +1,1 @@
- uvx ty check . && uvx ruff check . --fix
+ uv run ty check . && uv run ruff check . --fix

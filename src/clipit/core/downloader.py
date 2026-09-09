@@ -1,7 +1,7 @@
 import requests
 from requests import RequestException
 
-from clipit.core import ClipitError
+from clipit.core import DownloadError
 
 
 def download_html_content(url, user_agent: str | None) -> str:
@@ -18,7 +18,7 @@ def download_html_content(url, user_agent: str | None) -> str:
         response.raise_for_status()
         html_content = response.content.decode("utf-8")
     except RequestException as e:
-        raise ClipitError(f"Error downloading {url}: {e}")
+        raise DownloadError(f"Error downloading {url}: {e}") from e
 
     return html_content
 

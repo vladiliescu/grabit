@@ -52,6 +52,9 @@ clipit [OPTIONS] URL
 - `--include-source / --no-include-source`: Include the page source URL at the top of the document. Also a bit redundant when rendering the YAML frontmatter, but this one I don't like so much (default: `disabled`).
 - `--user-agent TEXT`: Set a custom User-Agent to be used for retrieving web pages (default: `Clipit/<version>`).
 - `--fallback-title TEXT`: Fallback title if no title is found. Use `{date}` for the current date (default: `Untitled {date}`).
+- `--bookmark-on-failure`: Save a Markdown bookmark if downloading fails, without asking for confirmation. Without this option, interactive terminals offer a bookmark prompt and noninteractive commands exit with the download error.
+- `--title TEXT`: Title for the bookmark fallback. Prompts in interactive terminals when omitted; otherwise uses the URL hostname.
+- `--notes TEXT`: Markdown notes for the bookmark fallback. Prompts in interactive terminals when omitted; otherwise leaves notes empty.
 - `--use-readability-js / --no-use-readability-js`: Use Readability.js for processing pages. Disabling it will result in **some** processing courtesy of [ReadabiliPy](https://github.com/alan-turing-institute/ReadabiliPy), but it doesn't look so great to be honest (requires Node.js, default: `enabled`).
 - `--create-domain-subdir / --no-create-domain-subdir`: Save the resulting files in a subdirectory named after the domain. Useful when saving a **lot** of bookmarks in the same Obsidian vault (default: `enabled`).
 - `--overwrite / --no-overwrite`: Overwrite existing files (default: `disabled`).
@@ -59,6 +62,18 @@ clipit [OPTIONS] URL
 
 
 ### Examples
+
+- **Fall back to a bookmark when a page cannot be downloaded:**
+```sh
+clipit https://example.com/article --bookmark-on-failure
+```
+
+- **Supply bookmark details without prompts, including in scripts:**
+```sh
+clipit https://example.com/article --bookmark-on-failure --title "Reading list" --notes "Read this later."
+```
+
+The normal download is always attempted first. Title and notes apply only to the bookmark fallback. Bookmarks follow the existing metadata, directory, and overwrite options. If YAML front matter is disabled, the bookmark includes a source link so the URL is preserved. File output falls back to `.md`, including when HTML was requested; `-f stdout.md` prints the bookmark instead. Prompts and download diagnostics go to stderr. Only download failures trigger the fallback; extraction and file-writing errors still fail normally.
 
 - **Save a web page as Markdown with the default options:**
 ```sh

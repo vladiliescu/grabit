@@ -5,6 +5,10 @@ class ClipitError(Exception):
     pass
 
 
+class DownloadError(ClipitError):
+    pass
+
+
 def sanitize_filename(filename: str) -> str:
     """Return a version of filename safe for most filesystems."""
     sanitized = re.sub(r"[#|%\^\[\]]", "", filename)

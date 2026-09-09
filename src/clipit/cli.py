@@ -1,10 +1,23 @@
+import sys
+from urllib.parse import urlparse
+
 import click
 
 from clipit import ClipitError, Clipper, OutputFormat, __version__
+from clipit.core import DownloadError, RenderFlags
+from clipit.core.bookmark import bookmark_outputs
+from clipit.core.writer import output
 
 
 @click.command()
 @click.argument("url")
+@click.option(
+    "--bookmark-on-failure",
+    is_flag=True,
+    help="Save a Markdown bookmark on download failure without confirmation. Scripts fail by default.",
+)
+@click.option("--title", help="Title for the bookmark fallback (defaults to the URL hostname).")
+@click.option("--notes", help="Markdown notes for the bookmark fallback.")
 @click.option(
     "--user-agent",
     default=f"Clipit/{__version__}",
@@ -76,6 +89,9 @@ from clipit import ClipitError, Clipper, OutputFormat, __version__
 )
 def main(
     url: str,
+    bookmark_on_failure: bool,
+    title: str | None,
+    notes: str | None,
     user_agent: str,
     use_readability_js: bool,
     yaml_frontmatter: bool,
@@ -92,18 +108,47 @@ def main(
     """
     try:
         clipper = Clipper(user_agent=user_agent)
-        clipper.clip_and_save(
-            url=url,
-            use_readability_js=use_readability_js,
-            fallback_title=fallback_title,
-            include_source=include_source,
-            include_title=include_title,
-            yaml_frontmatter=yaml_frontmatter,
-            output_formats=list(output_formats),
-            create_domain_subdir=create_domain_subdir,
-            overwrite=overwrite,
-            download_images=download_images,
-        )
+        try:
+            clipper.clip_and_save(
+                url=url,
+                use_readability_js=use_readability_js,
+                fallback_title=fallback_title,
+                include_source=include_source,
+                include_title=include_title,
+                yaml_frontmatter=yaml_frontmatter,
+                output_formats=list(output_formats),
+                create_domain_subdir=create_domain_subdir,
+                overwrite=overwrite,
+                download_images=download_images,
+            )
+        except DownloadError as e:
+            interactive = sys.stdin.isatty() and sys.stderr.isatty()
+            if not bookmark_on_failure and not interactive:
+                raise
+
+            click.echo(str(e), err=True)
+            if not bookmark_on_failure and not click.confirm("Save a bookmark instead?", default=False, err=True):
+                raise
+
+            page_title = title or urlparse(url).hostname or url
+            if interactive:
+                if title is None:
+                    page_title = click.prompt("Title", default=page_title, err=True)
+                if notes is None:
+                    notes = click.prompt("Notes (optional)", default="", show_default=False, err=True)
+
+            outputs = bookmark_outputs(
+                url,
+                page_title,
+                notes or "",
+                RenderFlags(
+                    include_source=include_source or not yaml_frontmatter,
+                    include_title=include_title,
+                    yaml_frontmatter=yaml_frontmatter,
+                ),
+                list(output_formats),
+            )
+            output(page_title, outputs, url, create_domain_subdir, overwrite)
     except ClipitError as e:
         raise click.ClickException(str(e))
 
