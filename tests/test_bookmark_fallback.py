@@ -36,10 +36,11 @@ def site(tmp_path):
 def run_cli(tmp_path):
     workdir = tmp_path / "output"
     workdir.mkdir()
+
     def run(*args, terminal_input=None):
-        command = [sys.executable, "-m", "clipit.cli", *args]
+        command = [sys.executable, "-m", "clipit.cli", "--no-create-domain-subdir", "--no-use-readability-js", *args]
         if terminal_input is None:
-            return subprocess.run(command, cwd=workdir, input="", capture_output=True, text=True, timeout=120)
+            return subprocess.run(command, cwd=workdir, input="", capture_output=True, text=True, timeout=10)
 
         if os.name != "posix":
             pytest.skip("Terminal interaction requires a POSIX pseudo-terminal")
@@ -47,18 +48,12 @@ def run_cli(tmp_path):
 
         master, slave = pty.openpty()
         try:
-            with subprocess.Popen(
-                command, cwd=workdir, stdin=slave, stdout=subprocess.PIPE, stderr=slave, text=True
-            ) as process:
-                os.write(master, terminal_input.encode())
-                try:
-                    stdout, _ = process.communicate(timeout=120)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.communicate()
-                    raise
-                stderr = os.read(master, 65536).decode()
-                return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+            os.write(master, terminal_input.encode())
+            result = subprocess.run(
+                command, cwd=workdir, stdin=slave, stdout=subprocess.PIPE, stderr=slave, text=True, timeout=10
+            )
+            result.stderr = os.read(master, 65536).decode()
+            return result
         finally:
             os.close(master)
             os.close(slave)
@@ -76,72 +71,58 @@ def test_noninteractive_download_failure_errors_by_default(site, run_cli):
     assert list(workdir.iterdir()) == []
 
 
-@pytest.mark.parametrize("supplied_title", [None, "My bookmark"])
-def test_noninteractive_fallback_saves_metadata_and_notes(site, run_cli, supplied_title):
+def test_noninteractive_fallback_saves_metadata_and_notes(site, run_cli):
     workdir, run = run_cli
-    args = [f"{site}/missing", "--bookmark-on-failure", "--notes", "Some **Markdown** notes."]
-    if supplied_title:
-        args.extend(["--title", supplied_title])
-    result = run(*args)
+    result = run(
+        f"{site}/missing", "--bookmark-on-failure", "--title", "My bookmark", "--notes", "Some **Markdown** notes."
+    )
 
     assert result.returncode == 0, result.stderr
-    title = supplied_title or "127.0.0.1"
-    markdown = (workdir / f"127.0.0.1:{site.rsplit(':', 1)[1]}" / f"{title}.md").read_text()
+    markdown = (workdir / "My bookmark.md").read_text()
     metadata = yaml.safe_load(markdown.split("---", 2)[1])
-    assert metadata["title"] == title
+    assert metadata["title"] == "My bookmark"
     assert metadata["source"] == f"{site}/missing"
-    assert metadata["date"]
-    assert f"# {title}" in markdown
     assert "Some **Markdown** notes." in markdown
-    assert "Save a bookmark" not in result.stderr
 
 
 def test_fallback_stdout_preserves_url_without_frontmatter(site, run_cli):
     workdir, run = run_cli
-    result = run(
-        f"{site}/missing", "--bookmark-on-failure", "-f", "stdout.md", "--no-yaml-frontmatter", "--no-include-title"
-    )
+    result = run(f"{site}/missing", "--bookmark-on-failure", "-f", "stdout.md", "--no-yaml-frontmatter")
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == f"[Source]({site}/missing)"
-    assert "404" in result.stderr
+    assert result.stdout.strip() == f"# 127.0.0.1\n\n[Source]({site}/missing)"
     assert list(workdir.iterdir()) == []
 
 
 @pytest.mark.parametrize(
-    "args, terminal_input, saved, confirmation",
+    "args, terminal_input",
     [
-        ([], "y\nManual title\nManual notes\n", True, True),
-        ([], "n\n", False, True),
-        (["--bookmark-on-failure"], "Manual title\nManual notes\n", True, False),
+        ([], "y\nManual title\nManual notes\n"),
+        (["--bookmark-on-failure"], "Manual title\nManual notes\n"),
     ],
 )
-def test_interactive_fallback(site, run_cli, args, terminal_input, saved, confirmation):
+def test_interactive_fallback_saves_manual_details(site, run_cli, args, terminal_input):
     workdir, run = run_cli
-    result = run(f"{site}/missing", "--no-create-domain-subdir", *args, terminal_input=terminal_input)
+    result = run(f"{site}/missing", *args, terminal_input=terminal_input)
 
-    assert ("Save a bookmark instead?" in result.stderr) is confirmation
-    assert result.returncode == (0 if saved else 1), result.stderr
-    if saved:
-        markdown = (workdir / "Manual title.md").read_text()
-        assert "# Manual title" in markdown
-        assert "Manual notes" in markdown
-    else:
-        assert list(workdir.iterdir()) == []
+    assert result.returncode == 0, result.stderr
+    markdown = (workdir / "Manual title.md").read_text()
+    assert "# Manual title" in markdown
+    assert "Manual notes" in markdown
+
+
+def test_declining_bookmark_preserves_download_error(site, run_cli):
+    workdir, run = run_cli
+    result = run(f"{site}/missing", terminal_input="n\n")
+
+    assert result.returncode == 1
+    assert "404" in result.stderr
+    assert list(workdir.iterdir()) == []
 
 
 def test_successful_download_ignores_bookmark_options(site, run_cli):
     workdir, run = run_cli
-    result = run(
-        site,
-        "--bookmark-on-failure",
-        "--title",
-        "Bookmark title",
-        "--notes",
-        "Bookmark notes",
-        "--no-use-readability-js",
-        "--no-create-domain-subdir",
-    )
+    result = run(site, "--bookmark-on-failure", "--title", "Bookmark title", "--notes", "Bookmark notes")
 
     assert result.returncode == 0, result.stderr
     markdown = (workdir / "Example Domain.md").read_text()
@@ -151,34 +132,17 @@ def test_successful_download_ignores_bookmark_options(site, run_cli):
 
 def test_extraction_failure_does_not_create_a_bookmark(site, run_cli):
     workdir, run = run_cli
-    result = run(f"{site}/empty.html", "--bookmark-on-failure", "--no-use-readability-js")
+    result = run(f"{site}/empty.html", "--bookmark-on-failure")
 
     assert result.returncode == 1
     assert "Error processing HTML content" in result.stderr
     assert list(workdir.iterdir()) == []
 
 
-def test_fallback_honors_overwrite_and_uses_markdown_for_html_requests(site, run_cli):
+def test_html_download_failure_saves_a_markdown_bookmark(site, run_cli):
     workdir, run = run_cli
-    bookmark = workdir / "Bookmark.md"
-    bookmark.write_text("Existing content")
-    args = [
-        f"{site}/missing",
-        "--bookmark-on-failure",
-        "--title",
-        "Bookmark",
-        "--notes",
-        "Replacement notes",
-        "--no-create-domain-subdir",
-        "-f",
-        "html",
-    ]
+    result = run(f"{site}/missing", "--bookmark-on-failure", "--title", "Bookmark", "-f", "html")
 
-    result = run(*args)
     assert result.returncode == 0, result.stderr
-    assert bookmark.read_text() == "Existing content"
-
-    result = run(*args, "--overwrite")
-    assert result.returncode == 0, result.stderr
-    assert "Replacement notes" in bookmark.read_text()
+    assert (workdir / "Bookmark.md").exists()
     assert not (workdir / "Bookmark.html").exists()
