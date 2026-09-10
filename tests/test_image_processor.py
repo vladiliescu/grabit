@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+from urllib.parse import quote
+
 from bs4 import BeautifulSoup
-from clipit.core.image_processor import extract_image_urls, process_images
+from clipit.core.image_processor import _image_identity, extract_image_urls, process_images
 
 
 def test_extract_image_urls_resolves_relative_and_deduplicates():
@@ -21,91 +24,106 @@ def test_extract_image_urls_resolves_relative_and_deduplicates():
     assert urls == ["https://example.com/images/photo.jpg", "https://cdn.example.com/logo.png"]
 
 
-def test_generate_image_filename_handles_duplicates_and_extensions(monkeypatch):
+def test_generate_image_filename_handles_duplicates_and_extensions(image_server):
     """Verifies that:
-    1. Original extension is preserved (image.PNG)
-    2. Duplicate names get numbered (image_1.PNG)
+    1. Original extension is preserved (photo.JPEG)
+    2. Duplicate names get numbered (photo_1.JPEG)
     3. Missing extensions get default extension (.jpg added to banner)
     """
     html = """
     <html>
         <body>
-            <img src="/assets/image.PNG">
-            <img src="/assets/image.PNG?size=large">
-            <img src="/assets/banner">
+            <img src="/photo.JPEG">
+            <img src="/photo.JPEG?size=large">
+            <img src="/banner">
         </body>
     </html>
     """
 
-    def fake_download(url: str, user_agent: str | None):
-        return b"fake-image-data"
-
-    monkeypatch.setattr("clipit.core.image_processor.download_image", fake_download)
-
-    processed_html, images = process_images(html, "test-title", "https://example.com/page", user_agent=None)
+    base_url, _, _ = image_server
+    processed_html, images = process_images(html, "test-title", base_url, user_agent=None)
 
     filenames = [filename for filename, _ in images]
 
-    assert filenames == ["test-title/image.PNG", "test-title/image_1.PNG", "test-title/banner.jpg"]
+    assert filenames == ["test-title/photo.JPEG", "test-title/photo_1.JPEG", "test-title/banner.jpg"]
 
 
-def test_process_images_downloads_once_and_rewrites_src(monkeypatch):
+def test_process_images_downloads_once_and_rewrites_src(image_server):
     html = """
     <html>
         <body>
-            <img src="/assets/photo.jpg">
-            <img src="/assets/photo.jpg">
-            <img src="https://cdn.example.com/logo">
+            <img src="/photo.JPEG">
+            <a href="/photo.JPEG"><picture><source srcset="/photo.JPEG 2x">
+                <img src="/photo.JPEG" srcset="/photo.JPEG 2x">
+            </picture></a>
+            <img src="/banner">
         </body>
     </html>
     """
 
-    download_calls: list[str] = []
-
-    def fake_download(url: str, user_agent: str | None):
-        download_calls.append(url)
-        return f"bytes-for-{url}".encode()
-
-    monkeypatch.setattr("clipit.core.image_processor.download_image", fake_download)
-
-    processed_html, images = process_images(html, "test-title", "https://example.com/page", user_agent=None)
+    base_url, directory, received_requests = image_server
+    processed_html, images = process_images(html, "test-title", base_url, user_agent=None)
 
     soup = BeautifulSoup(processed_html, "html.parser")
     rewritten_sources = [img["src"] for img in soup.find_all("img")]
 
-    assert download_calls == [
-        "https://example.com/assets/photo.jpg",
-        "https://cdn.example.com/logo",
-    ]
+    assert received_requests == ["/photo.JPEG", "/banner"]
 
-    assert rewritten_sources == ["test-title/photo.jpg", "test-title/photo.jpg", "test-title/logo.jpg"]
+    assert rewritten_sources == ["test-title/photo.JPEG", "test-title/photo.JPEG", "test-title/banner.jpg"]
+    assert soup.select("a")[0]["href"] == "test-title/photo.JPEG"
+    assert not soup.select("source, img[srcset]")
 
     assert images == [
-        ("test-title/photo.jpg", b"bytes-for-https://example.com/assets/photo.jpg"),
-        ("test-title/logo.jpg", b"bytes-for-https://cdn.example.com/logo"),
+        ("test-title/photo.JPEG", (directory / "photo.JPEG").read_bytes()),
+        ("test-title/banner.jpg", (directory / "banner").read_bytes()),
     ]
 
 
-def test_process_images_preserves_original_src_on_failure(monkeypatch):
+def test_process_images_preserves_remote_src_on_failure(image_server, caplog):
     html = """
     <html>
         <body>
-            <img src="/assets/photo.jpg">
-            <img src="/assets/fallback.png">
+            <img src="/missing.jpg">
+            <img src="/converted.png">
         </body>
     </html>
     """
 
-    def fake_download(url: str, user_agent: str | None):
-        if url.endswith("photo.jpg"):
-            return None
-        return b"image-bytes"
-
-    monkeypatch.setattr("clipit.core.image_processor.download_image", fake_download)
-
-    processed_html, images = process_images(html, "test-title", "https://example.com/page", user_agent=None)
+    base_url, directory, _ = image_server
+    processed_html, images = process_images(html, "test-title", base_url, user_agent=None)
     soup = BeautifulSoup(processed_html, "html.parser")
     rewritten_sources = [img["src"] for img in soup.find_all("img")]
 
-    assert rewritten_sources == ["/assets/photo.jpg", "test-title/fallback.png"]
-    assert images == [("test-title/fallback.png", b"image-bytes")]
+    assert rewritten_sources == [f"{base_url}/missing.jpg", "test-title/converted.jpg"]
+    assert images == [("test-title/converted.jpg", (directory / "converted.png").read_bytes())]
+    assert f"{base_url}/missing.jpg" in caplog.text
+    assert "404" in caplog.text
+
+
+def test_encoded_image_names_match_downloads_and_leave_article_links_alone(image_server):
+    base_url, directory, _ = image_server
+    filename = "https%3A%2F%2Fexample.com%2Fphotos%2Fbook%20cover.png"
+    src = f"/{quote(filename, safe='%')}"
+    # SimpleHTTPRequestHandler decodes URL paths when locating files.
+    nested_file = directory / "https:" / "example.com" / "photos" / "book cover.png"
+    nested_file.parent.mkdir(parents=True)
+    nested_file.write_bytes((directory / "converted.png").read_bytes())
+    html = f'<a href="/article"><img src="{src}"></a>'
+
+    processed_html, images = process_images(html, "A Review [50%]", base_url, None)
+
+    soup = BeautifulSoup(processed_html, "html.parser")
+    assert soup.select("img")[0]["src"] == "A%20Review%2050/book%20cover.jpg"
+    assert soup.select("a")[0]["href"] == "/article"
+    assert images == [("A Review 50/book cover.jpg", nested_file.read_bytes())]
+
+
+def test_substack_resized_and_fullsize_urls_identify_the_same_image():
+    html = (Path(__file__).parent / "fixtures" / "substack-image.html").read_text()
+    soup = BeautifulSoup(html, "html.parser")
+    src = soup.select("img")[0]["src"]
+    href = soup.select("a")[0]["href"]
+
+    assert src != href
+    assert _image_identity(str(src)) == _image_identity(str(href))
+    assert _image_identity(str(src)).endswith("14fa9a26-c37b-410f-8c3d-16465182c68f_5094x1762.png")
