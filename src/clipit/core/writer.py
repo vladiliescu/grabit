@@ -1,10 +1,10 @@
 from pathlib import Path
-from urllib.parse import urlparse
 
 import click
 
 from clipit.core import ClipitError, OutputFlags, OutputFormat
 from clipit.core.misc import sanitize_filename
+from clipit.core.paths import get_output_directory
 
 
 def should_output_file(output_formats: dict[OutputFormat, str]) -> bool:
@@ -18,8 +18,8 @@ def output(
     create_domain_subdir: bool,
     overwrite: bool,
     images: list[tuple[str, bytes]] | None = None,
+    output_dir: Path | None = None,
 ):
-    output_dir = None
     safe_title = None
 
     output_flags = OutputFlags(
@@ -28,10 +28,9 @@ def output(
     )
 
     if should_output_file(outputs):
-        if output_flags.create_domain_subdir:
-            output_dir = create_output_dir(url)
-        else:
-            output_dir = Path(".")
+        if output_dir is None:
+            output_dir = get_output_directory(url, output_flags.create_domain_subdir)
+        output_dir.mkdir(exist_ok=True, parents=True)
         safe_title = sanitize_filename(title) or "Untitled"
 
         if images:
@@ -69,11 +68,7 @@ def write_to_file(
 
 
 def create_output_dir(url):
-    parsed_url = urlparse(url)
-    domain = parsed_url.netloc.replace("www.", "")
-    if not domain:
-        domain = "unknown_domain"
-    output_dir = Path(".") / domain
+    output_dir = get_output_directory(url, True)
     output_dir.mkdir(exist_ok=True, parents=True)
 
     return output_dir

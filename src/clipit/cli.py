@@ -78,6 +78,10 @@ from clipit.core.writer import output
     show_default=True,
 )
 @click.option(
+    "--download-folder",
+    help="Image directory template, relative to the working directory. Supports ${domain} and ${file_name}.",
+)
+@click.option(
     "-f",
     "--format",
     "output_formats",
@@ -102,6 +106,7 @@ def main(
     output_formats: list[str],
     overwrite: bool,
     download_images: bool,
+    download_folder: str | None,
 ) -> None:
     """
     Download a URL, convert it to Markdown/HTML with specified options, and save it to a file.
@@ -120,6 +125,7 @@ def main(
                 create_domain_subdir=create_domain_subdir,
                 overwrite=overwrite,
                 download_images=download_images,
+                download_folder=download_folder,
             )
         except DownloadError as e:
             interactive = sys.stdin.isatty() and sys.stderr.isatty()

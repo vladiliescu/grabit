@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 from clipit.core import ClipitError, RenderFlags
@@ -21,6 +22,8 @@ class RedditGrabber(BaseGrabber):
         render_flags: RenderFlags,
         output_formats: OutputFormatList,
         download_images: bool,
+        download_folder: str | None = None,
+        output_dir: Path = Path("."),
     ) -> tuple[str, dict[OutputFormat, str], list[tuple[str, bytes]]]:
         if (
             output_formats.should_output_raw_html()

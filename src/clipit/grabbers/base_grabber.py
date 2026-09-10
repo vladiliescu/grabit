@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 
 from clipit.core import OutputFormat, OutputFormatList, RenderFlags
 from clipit.core.downloader import download_html_content
@@ -10,6 +11,7 @@ from clipit.core.markdown_converter import (
     try_include_source,
     try_include_title,
 )
+from clipit.core.paths import get_image_directory
 
 
 class BaseGrabber:
@@ -25,6 +27,8 @@ class BaseGrabber:
         render_flags: RenderFlags,
         output_formats: OutputFormatList,
         download_images: bool,
+        download_folder: str | None = None,
+        output_dir: Path = Path("."),
     ) -> tuple[str, dict[OutputFormat, str], list[tuple[str, bytes]]]:
         outputs = {}
         images: list[tuple[str, bytes]] = []
@@ -39,7 +43,8 @@ class BaseGrabber:
         should_download_images = download_images and any(fmt.is_file_output() for fmt in output_formats)
 
         if should_download_images:
-            processed_html, images = process_images(html_readable_content, title, url, user_agent)
+            directory = get_image_directory(title, url, download_folder, output_dir)
+            processed_html, images = process_images(html_readable_content, title, url, user_agent, directory)
             html_readable_content = processed_html
 
         if output_formats.should_output_readable_html():

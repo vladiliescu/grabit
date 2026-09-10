@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from clipit.core import OutputFormat, OutputFormatList
 from clipit.core.dtos import RenderFlags
+from clipit.core.paths import get_output_directory
 from clipit.core.writer import output
 from clipit.grabbers import BaseGrabber, RedditGrabber
 
@@ -20,6 +23,8 @@ class Clipper:
         yaml_frontmatter: bool,
         output_formats: list[str],
         download_images: bool = False,
+        download_folder: str | None = None,
+        output_dir: Path = Path("."),
     ) -> tuple[str, dict[OutputFormat, str], list[tuple[str, bytes]]]:
         grabber = next((g for g in grabbers if g.can_handle(url)), None)
         if grabber is None:
@@ -33,7 +38,15 @@ class Clipper:
         )
 
         return grabber.grab(
-            url, self.user_agent, use_readability_js, fallback_title, render_flags, output_format_list, download_images
+            url,
+            self.user_agent,
+            use_readability_js,
+            fallback_title,
+            render_flags,
+            output_format_list,
+            download_images,
+            download_folder,
+            output_dir,
         )
 
     def clip_and_save(
@@ -48,7 +61,9 @@ class Clipper:
         create_domain_subdir: bool,
         overwrite: bool,
         download_images: bool = False,
+        download_folder: str | None = None,
     ) -> None:
+        output_dir = get_output_directory(url, create_domain_subdir)
         title, outputs, images = self.clip(
             url,
             use_readability_js,
@@ -58,6 +73,8 @@ class Clipper:
             yaml_frontmatter,
             output_formats,
             download_images,
+            download_folder,
+            output_dir,
         )
         output(
             title,
@@ -66,4 +83,5 @@ class Clipper:
             create_domain_subdir,
             overwrite,
             images=images,
+            output_dir=output_dir,
         )

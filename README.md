@@ -58,10 +58,19 @@ clipit [OPTIONS] URL
 - `--use-readability-js / --no-use-readability-js`: Use Readability.js for processing pages. Disabling it will result in **some** processing courtesy of [ReadabiliPy](https://github.com/alan-turing-institute/ReadabiliPy), but it doesn't look so great to be honest (requires Node.js, default: `enabled`).
 - `--create-domain-subdir / --no-create-domain-subdir`: Save the resulting files in a subdirectory named after the domain. Useful when saving a **lot** of bookmarks in the same Obsidian vault (default: `enabled`).
 - `--overwrite / --no-overwrite`: Overwrite existing files (default: `disabled`).
+- `--download-images / --no-download-images`: Download article images and use local references in Markdown and readable HTML (default: `disabled`). Images are stored in a directory named after the article, beside the saved document.
+- `--download-folder TEXT`: Set an image-directory template when downloading images. Relative paths start at the working directory; `${domain}` is the page's domain and `${file_name}` is the sanitized article filename without its extension. Markdown and readable HTML use paths relative to the saved document. The library's `clip()` and `clip_and_save()` methods accept the same template as `download_folder`; `clip()` uses the working directory as its document directory unless `output_dir` is supplied.
 - `-f, --format [md|stdout.md|html|raw.html]`: Output format(s) to save the content in. Most useful are `md`, which saves the content to a Markdown file, and `stdout.md` which simply outputs the raw content so you can pipe it to something else, like the clipboard or Simon Willison's [llm cli](https://github.com/simonw/llm). Can be specified multiple times (default: `md`).
 
 
 ### Examples
+
+- **Save article images in a separate attachments directory:**
+```sh
+clipit --download-images --download-folder './attachments/${domain}/${file_name}' https://example.com/article
+```
+
+Use single quotes so the shell passes the template unchanged. This saves the document under `example.com/` and its images under `attachments/example.com/<article title>/`. Omit `--download-folder` to keep images beside the document in its article directory. Existing archives are not moved; use `--overwrite` to update an existing note's image references. Files no longer referenced by a note are not deleted.
 
 - **Fall back to a bookmark when a page cannot be downloaded:**
 ```sh
