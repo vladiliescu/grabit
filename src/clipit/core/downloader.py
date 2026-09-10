@@ -1,3 +1,5 @@
+import logging
+
 import requests
 from requests import RequestException
 
@@ -23,7 +25,7 @@ def download_html_content(url, user_agent: str | None) -> str:
     return html_content
 
 
-def download_image(url: str, user_agent: str | None) -> bytes | None:
+def download_image(url: str, user_agent: str | None) -> tuple[bytes, str] | None:
     request_headers = {
         "User-Agent": user_agent,
         "Accept": "image/*",
@@ -35,7 +37,8 @@ def download_image(url: str, user_agent: str | None) -> bytes | None:
     try:
         response = requests.get(url, headers=request_headers, timeout=10)
         response.raise_for_status()
-    except RequestException:
+    except RequestException as exc:
+        logging.getLogger(__name__).warning("Failed to download image %s: %s", url, exc)
         return None
 
-    return response.content
+    return response.content, response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
