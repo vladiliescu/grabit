@@ -38,6 +38,12 @@ def try_add_yaml_frontmatter(yaml_frontmatter: bool, markdown_content, title, ur
 
 
 class ClipitMarkdownConverter(MarkdownConverter):
+    def convert_img(self, el, text, parent_tags):
+        # Table images can be wrapped in links or other inline elements.
+        if {"td", "th"} & parent_tags:
+            parent_tags = parent_tags - {"_inline"}
+        return super().convert_img(el, text, parent_tags)  # ty: ignore[unresolved-attribute]
+
     def convert_em(self, el, text, parent_tags):
         return self.convert_i(el, text, parent_tags)
 
