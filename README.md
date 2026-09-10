@@ -7,9 +7,9 @@ It's ideal for archiving articles, blog posts, or any web content you may want t
 I'm using it to save bookmarks in [Obsidian](https://obsidian.md/), so you'll see a lot of focus in this area (the YAML front matter, the domain subdirectory, etc.). But it's flexible enough to be used in other contexts as well.
 
 
-| It gets you from this                                    | to this                                     |
-|-------------------------------------------|-------------------------------------------|
-| ![Raw html](https://vladiliescu.net/grabit-web-downloader/img/before.png "Before") | ![Markdown](https://vladiliescu.net/grabit-web-downloader/img/after.png "After") |
+| It gets you from this                                                              | to this                                                                          |
+|------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|
+| ![Raw html](https://vladiliescu.net/clipit-web-downloader/img/before.png "Before") | ![Markdown](https://vladiliescu.net/clipit-web-downloader/img/after.png "After") |
 
 
 
